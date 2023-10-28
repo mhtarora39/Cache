@@ -149,23 +149,27 @@ struct LRUEviction : EvictionPolicy<Dtype>
 
    void set(const std::string &id, DataPtr &data)
    {
+
+      // Updating exiting key , Moving at the top of queue.
       if(m_cache.find(id) != m_cache.end()) {
          auto& prev_ele = m_cache[id];
          prev_ele->update_buf(data->buf());
          update_on_get(prev_ele);
-
          return;
       }
       else {
          m_cache[id] = data;
          data->set_id(id);
       }
+      // First Element
       if (m_cache.size()  == 1)
       {
          first = data;
          last = data;
          return;
       }
+
+      // Moving forward removing element if cache limit is exceeded.
       update_on_set(data);
       if (m_cache.size() > m_cache_limit)
       {
@@ -182,25 +186,23 @@ struct LRUEviction : EvictionPolicy<Dtype>
    void display() {
       auto root = first;
       while(root /*&& count > 0*/) {
-         auto prev = root->prev == nullptr ? "NULLPTR" : std::to_string(root->prev->buf());
-         auto next = root->next == nullptr ? "NULLPTR" : std::to_string(root->next->buf());
-         std::cout << root->buf()  << " PREV : " << prev <<  " NEXT : " << next << "\n";
+         
+         auto get_buf = [] (const DataPtr& dptr) {
+            return dptr == nullptr ? "NULLPTR" : std::to_string(dptr->buf());
+         };
+         
+         std::cout << root->buf() << /*"( PREV : " << get_buf(root->prev) <<  " NEXT : " << get_buf(root->next) << " )*/ " <-> ";
          root = root->next;
       }
-      std::cout << " \n First " << first->buf() << " Last " << last->buf() << " \n"; 
+      std::cout << "\nFirst " << first->buf() << " Last " << last->buf() << " \n"; 
 
    }
 
 private:
   
+   // Moving current data_ptr to top of the queue. Rest of the order unchanged. 
    void update_on_get(DataPtr &data_ptr) 
    {
-      // 3<->2<->1 (First->3 , Last->1)
-      // get(2) -> 2<->3<->1 (first->2 , last->1)
-      // get(1) -> 1<->2<->3 (first->1, last->3)
-
-      // 1<->2
-      // get(2) --> last -> 1 2<->1 fi
       if(first->get_id() == data_ptr->get_id()) {
          return;
       }
@@ -221,7 +223,7 @@ private:
       first = data_ptr;
    }
 
-
+   // Updating the element to top of the queue as it recently added.
    void update_on_set(DataPtr &data_ptr)
    {
       // First -> 1->nullptr
@@ -240,6 +242,8 @@ private:
    std::string last_id;
 };
 
+//Cache Object take the data type we want to store. This class also taking eviction policy
+//and limit to cache, Providing get and set APIs of the cache 
 template <typename BufDtype>
 struct Cache
 {
@@ -280,28 +284,47 @@ private:
 
 int main() {
    auto cache = Cache<int>(3,"LRU");
+   std::cout << "Cache limit = 3 , Adding 1,2,3,4 in cache!\n";
    cache.set("1",1);
    cache.set("2",2);
    cache.set("3",3);
    cache.set("4",4);
    cache.display();
+   std::cout <<"Output Should be 4<->3<->2\n";
    cache.get("2");
-
+   std::cout << "Getting 2 from cache\n";
    cache.display();
+   std::cout << "Order should be 2<->4<->3\n";
+   std::cout << "Getting 1 from cache Should Throw Error\n "; 
    TRY_RELEASE(cache.get("1"),"KEY NOT FOUND");
    cache.display();
+   std::cout << "Order should be 2<->4<->3\n";
+   std::cout << "Updating 4 to 5\n";
    cache.set("4",5);
    cache.display();
+   std::cout << "Order should be 5<->2<->3\n";
    cache.get("2");
+   std::cout << "Getting 2 from cache\n";
    cache.display();
+   std::cout << "Order should be 2<->5<->3\n";
+   std::cout << "Getting 3 from cache\n";
    cache.get("3");
+   std::cout << "Order should be 3<->2<->5\n";
    cache.display();
+   std::cout << "Setting 6 to cache\n";
    cache.set("6",6);
+   std::cout << "Order should be 6<->3<->2\n";
    cache.display();
+   std::cout << "Setting 7 to cache\n";
    cache.set("7",7);
+   std::cout << "Order should be 7<->6<->3\n";
    cache.display();
+   std::cout << "Getting 3 from cache\n";
    cache.get("3");
+   std::cout << "Order should be 3<->7<->6\n";
    cache.display();
+   std::cout << "Setting 8 to cache\n";
    cache.set("8",8);
    cache.display();
+   std::cout << "Order should be 8<->3<->7\n";
 }
